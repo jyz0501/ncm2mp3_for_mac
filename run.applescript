@@ -1,5 +1,5 @@
 on run {input, parameters}
-	set pythonScriptPath to "YOUR ncm2mp3.py FILE PATH"
+	set pythonScriptPath to "/Users/alun/Documents/ncm2mp3.py"
 	set argument to item 1 of input
 	try
 		set resultText to do shell script "python3 " & pythonScriptPath & " " & quoted form of argument
