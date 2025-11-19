@@ -46,11 +46,11 @@
 
 3. 导入快捷指令
    
-   双击打开 网易云转换.shortcut
+   双击打开 网易云转换.shortcut，添加快捷指令
 
 4. 配置脚本路径
    
-   将本仓库中 `run.applescript` 的内容复制到 AppleScript 的输入框里，注意把里面的文件路径（YOUR ncm2mp3.py FILE PATH）改成你实际存放`ncm2mp3.py`的路径
+   将本仓库中 `run.applescript` 的内容复制到 AppleScript 的输入框里，注意把里面的文件路径（/Users/alun/Documents/ncm2mp3.py）改成你实际存放`ncm2mp3.py`的路径
 
    ```python
    -- 示例：将路径修改为你的实际路径
