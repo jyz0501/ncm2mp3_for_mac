@@ -20,3 +20,10 @@ python ncm_converter.py test.ncm --keep-original
 
 # 批量转换并写入元数据
 python ncm_converter.py /path/to/ncm/files/ -w 4
+
+安装命令
+# 使用pip安装所有依赖
+pip install -r requirements.txt
+
+# 或者手动安装
+pip install mutagen pycryptodome tqdm
