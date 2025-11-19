@@ -1,29 +1,53 @@
 # ncm2mp3_for_mac
 A shortcuts for MacOS to change .ncm to .mp3
-将网易云音乐下载的 .ncm 文件转换为 .mp3 文件
+使用macOS 的（ShortCuts）快捷指令一键转换网易云音乐NCM格式
 
-# Usage
-1. `clone` 本仓库，将其中的`ncm2mp3.py`放在一个你喜欢的路径下
-2. 确保你的Mac上安装了`python3`（可以在终端中运行 python --version）新版 MacOS 一般已预装 python3，然后用`pip3 install pycryptodome` 安装脚本运行所需依赖
-3. 打开MacOS自带的“快捷指令”app，创建一个快捷指令：
+# ✨ 功能特性
+批量转换：自动处理指定文件夹内的所有 .ncm 文件。
+格式保留：能够识别原始文件是 MP3 还是 FLAC 格式，并生成对应格式的文件。
+元数据嵌入：自动将歌曲的元数据（如歌名、专辑、艺术家）写入转换后的音乐文件中。
+封面嵌入：自动提取并嵌入歌曲的专辑封面图片。
+跨平台运行：基于 Python 编写，可在 Windows, macOS, Linux 等操作系统上运行。
+2025-7-11更新：支持config.ini自定义转换后目录，添加转换后自动删除ncm文件功能，加入转换进度条和预计完成时间。
+2025-7-12更新：支持多线程模式，可以在config.inizi中配置线程数量，留空为默认选择，优化UI显示
+# 环境要求
+操作系统: macOS
+Python 3: 新版 macOS 一般已预装 Python 3，可在终端运行 python3 --version检查
+依赖包: pycryptodome（通过 pip3 安装）
+# 使用步骤
+1. 获取脚本文件
+克隆本仓库或下载 ncm2mp3.py 文件
+将 ncm2mp3.py 放置在你喜欢的路径下，例如 /Users/你的用户名/Documents/ncm2mp3.py
+
+2. 安装依赖
+在终端中执行以下命令安装所需依赖
+pip install -r requirements.txt
+或者手动安装
+pip install mutagen pycryptodome tqdm
+
+3. 导入快捷指令
+双击打开 网易云转换.shortcut
+
+4. 配置脚本路径
+将本仓库中 `run.applescript` 的内容复制到 AppleScript 的输入框里，注意把里面的文件路径（YOUR ncm2mp3.py FILE PATH）改成你实际存放`ncm2mp3.py`的路径
+-- 示例：将路径修改为你的实际路径
+set python_script to "/Users/你的用户名/Documents/ncm2mp3.py"
 <img width="1200" alt="image" src="https://github.com/iLern/ncm2mp3_for_mac/assets/43905872/764353dd-ecdb-485f-bb1f-423198403936">
 
-4. 将本仓库中 `run.applescript` 的内容复制到 AppleScript 的输入框里，注意把里面的文件路径改成你实际存放`ncm2mp3.py`的路径，例如 /Users/alun/Documents/ncm2mp3.py
-5. 现在你可以在访达中选中你想转换的`.ncm`文件，右键 > 快速操作 > ncm2mp3 完成转换
+5. 使用转换功能
+在访达（Finder）中选中要转换的 .ncm文件
+右键点击文件
+选择「快速操作」> 「ncm2mp3」
+转换后的 .mp3文件将生成在同一目录下
 <img width="338" alt="image" src="https://github.com/iLern/ncm2mp3_for_mac/assets/43905872/9213772a-f543-49b5-8645-7419ba2ce155">
+#注意事项
+确保 Python 脚本具有正确的执行权限
+如果遇到权限问题，可在终端运行：chmod +x /path/to/your/ncm2mp3.py
+#特别鸣谢
+项目参考：
+https://github.com/ww-rm/ncmdump-py 
+https://github.com/iLern/ncm2mp3_for_mac
 
-# 转换文件并写入元数据（自动删除源文件）
-python ncm_converter.py test.ncm
 
-# 保留源文件但写入元数据
-python ncm_converter.py test.ncm --keep-original
 
-# 批量转换并写入元数据
-python ncm_converter.py /path/to/ncm/files/ -w 4
 
-安装命令
-# 使用pip安装所有依赖
-pip install -r requirements.txt
-
-# 或者手动安装
-pip install mutagen pycryptodome tqdm
