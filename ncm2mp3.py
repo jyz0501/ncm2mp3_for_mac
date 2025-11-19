@@ -9,6 +9,16 @@ from Crypto.Cipher import AES
 from multiprocessing import Pool
 from Crypto.Util.Padding import unpad
 
+# 导入 mutagen 库用于元数据写入
+try:
+    from mutagen.flac import FLAC, Picture
+    from mutagen.id3 import APIC, ID3, TALB, TIT2, TPE1
+    from mutagen.mp3 import MP3
+except ImportError:
+    print("错误：未找到 mutagen 库。")
+    print("请使用 'pip install mutagen' 命令进行安装。")
+    exit()
+
 def error_msg(message):
     """输出错误消息"""
     tqdm.write(f"❌ {message}")
@@ -21,9 +31,78 @@ def success_msg(message):
     """输出成功消息"""
     tqdm.write(f"✅ {message}")
 
-# 密钥处理方式
+# 使用第一段代码的密钥处理方式
 CORE_KEY = bytes([0x68, 0x7A, 0x48, 0x52, 0x41, 0x6D, 0x73, 0x6F, 0x35, 0x6B, 0x49, 0x6E, 0x62, 0x61, 0x78, 0x57])
 MODIFY_KEY = bytes([0x23, 0x31, 0x34, 0x6C, 0x6A, 0x6B, 0x5F, 0x21, 0x5C, 0x5D, 0x26, 0x30, 0x55, 0x3C, 0x27, 0x28])
+
+def set_mp3_meta(mp3_file, meta_data, cover_data):
+    """为 MP3 文件写入元数据和封面"""
+    try:
+        audio = MP3(mp3_file, ID3=ID3)
+        if audio.tags is None:
+            audio.tags = ID3()
+
+        # 写入封面图片
+        if cover_data:
+            mime_type = 'image/jpeg'
+            if cover_data.startswith(b'\x89PNG\r\n\x1a\n'):
+                mime_type = 'image/png'
+            audio.tags.add(APIC(
+                encoding=3, 
+                mime=mime_type, 
+                type=3, 
+                desc='Cover', 
+                data=cover_data
+            ))
+
+        # 写入元数据
+        if meta_data:
+            audio.tags.add(TIT2(encoding=3, text=meta_data.get('musicName', 'Unknown')))
+            audio.tags.add(TALB(encoding=3, text=meta_data.get('album', 'Unknown')))
+            artists = '/'.join(arr[0] for arr in meta_data.get('artist', [['Unknown']]))
+            audio.tags.add(TPE1(encoding=3, text=artists))
+        
+        audio.save()
+        return True
+    except Exception as e:
+        error_msg(f"写入MP3元数据失败 {mp3_file}: {str(e)}")
+        return False
+
+def set_flac_meta(flac_file, meta_data, cover_data):
+    """为 FLAC 文件写入元数据和封面"""
+    try:
+        audio = FLAC(flac_file)
+        
+        # 写入元数据
+        if meta_data:
+            audio['title'] = meta_data.get('musicName', 'Unknown')
+            audio['album'] = meta_data.get('album', 'Unknown')
+            artists = '/'.join(arr[0] for arr in meta_data.get('artist', [['Unknown']]))
+            audio['artist'] = artists
+
+        # 写入封面图片
+        if cover_data:
+            pic = Picture()
+            pic.data = cover_data
+            pic.mime = "image/png" if cover_data.startswith(b'\x89PNG\r\n\x1a\n') else "image/jpeg"
+            pic.type = 3
+            audio.add_picture(pic)
+        
+        audio.save()
+        return True
+    except Exception as e:
+        error_msg(f"写入FLAC元数据失败 {flac_file}: {str(e)}")
+        return False
+
+def write_metadata(output_path, meta_data, cover_data):
+    """根据文件类型写入元数据和封面"""
+    if output_path.endswith('.mp3'):
+        return set_mp3_meta(output_path, meta_data, cover_data)
+    elif output_path.endswith('.flac'):
+        return set_flac_meta(output_path, meta_data, cover_data)
+    else:
+        info_msg(f"不支持的文件格式，跳过元数据写入: {output_path}")
+        return False
 
 def delete_source_file(filepath, output_path):
     """删除源文件，并进行安全检查"""
@@ -64,7 +143,7 @@ def dump_single_file(filepath, delete_original=True):
         # 检查是否已存在转换后的文件
         for ftype in ['mp3', 'flac']:
             fname = f'{filename}.{ftype}'
-            if os.path.isfile(fname):
+            if os.path.isfile(os.path.join(os.path.dirname(filepath), fname)):
                 info_msg(f'跳过 "{filepath}"，文件 "{fname}" 已存在')
                 return None
 
@@ -119,6 +198,8 @@ def dump_single_file(filepath, delete_original=True):
                 except Exception as e:
                     error_msg(f"解析 {filepath} 的元数据失败: {str(e)}")
                     meta_data = None
+            else:
+                info_msg(f"文件 {filepath} 缺少元数据信息")
 
             # 跳过CRC32和1字节
             f.seek(5, 1)
@@ -126,7 +207,7 @@ def dump_single_file(filepath, delete_original=True):
             # 处理封面图像数据
             image_space = struct.unpack('<I', f.read(4))[0]
             image_size = struct.unpack('<I', f.read(4))[0]
-            image_data = f.read(image_size) if image_size > 0 else None
+            cover_data = f.read(image_size) if image_size > 0 else None
             
             # 跳过剩余的图像空间
             if image_space > image_size:
@@ -152,6 +233,13 @@ def dump_single_file(filepath, delete_original=True):
                     out_file.write(chunk)
 
         info_msg(f'成功转换文件: "{output_path}"')
+        
+        # 写入元数据和封面
+        if meta_data or cover_data:
+            if write_metadata(output_path, meta_data, cover_data):
+                success_msg(f"元数据写入成功: {output_path}")
+            else:
+                error_msg(f"元数据写入失败: {output_path}")
         
         # 转换成功后删除源文件
         if delete_original:
@@ -189,9 +277,8 @@ def dump(*paths, n_workers=None, delete_original=True):
         
     # 显示简洁的头部信息
     header = f"""
-    # NCM文件转换工具
-    # ==============
     ==== 删除源文件: {'是' if delete_original else '否'} ====
+    元数据支持: MP3/FLAC
     """
     info_msg(header.strip())
 
@@ -236,7 +323,7 @@ def dump(*paths, n_workers=None, delete_original=True):
 if __name__ == '__main__':
     from argparse import ArgumentParser
 
-    parser = ArgumentParser(description='NCM文件转换工具')
+    parser = ArgumentParser(description='NCM文件转换工具（支持元数据和封面写入）')
     parser.add_argument(
         'paths',
         metavar='路径',
