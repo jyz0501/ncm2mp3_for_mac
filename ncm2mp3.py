@@ -14,18 +14,51 @@ def error_msg(message):
     tqdm.write(f"❌ {message}")
 
 def info_msg(message):
-    """输出信息消息（可选，用于重要提示）"""
+    """输出信息消息"""
     tqdm.write(f"ℹ️  {message}")
+
+def success_msg(message):
+    """输出成功消息"""
+    tqdm.write(f"✅ {message}")
 
 # 密钥处理方式
 CORE_KEY = bytes([0x68, 0x7A, 0x48, 0x52, 0x41, 0x6D, 0x73, 0x6F, 0x35, 0x6B, 0x49, 0x6E, 0x62, 0x61, 0x78, 0x57])
 MODIFY_KEY = bytes([0x23, 0x31, 0x34, 0x6C, 0x6A, 0x6B, 0x5F, 0x21, 0x5C, 0x5D, 0x26, 0x30, 0x55, 0x3C, 0x27, 0x28])
 
-def dump_single_file(filepath):
+def delete_source_file(filepath, output_path):
+    """删除源文件，并进行安全检查"""
+    try:
+        # 安全检查：确保输出文件存在且大小合理
+        if not os.path.exists(output_path):
+            error_msg(f"输出文件不存在，跳过删除源文件: {filepath}")
+            return False
+        
+        output_size = os.path.getsize(output_path)
+        if output_size < 1024:  # 小于1KB的文件可能转换失败
+            error_msg(f"输出文件大小异常({output_size}字节)，跳过删除源文件: {filepath}")
+            return False
+        
+        # 删除源文件
+        os.remove(filepath)
+        success_msg(f"已删除源文件: {os.path.basename(filepath)}")
+        return True
+        
+    except PermissionError:
+        error_msg(f"权限不足，无法删除源文件: {filepath}")
+        return False
+    except OSError as e:
+        error_msg(f"删除源文件失败: {filepath} - {str(e)}")
+        return False
+    except Exception as e:
+        error_msg(f"删除源文件时发生未知错误: {filepath} - {str(e)}")
+        return False
+
+def dump_single_file(filepath, delete_original=True):
+    """转换单个NCM文件"""
     try:
         filename = os.path.basename(filepath)
         if not filename.endswith('.ncm'): 
-            return
+            return None
         filename = filename[:-4]
         
         # 检查是否已存在转换后的文件
@@ -33,7 +66,7 @@ def dump_single_file(filepath):
             fname = f'{filename}.{ftype}'
             if os.path.isfile(fname):
                 info_msg(f'跳过 "{filepath}"，文件 "{fname}" 已存在')
-                return
+                return None
 
         with open(filepath, 'rb') as f:
             # 检查文件头
@@ -119,6 +152,11 @@ def dump_single_file(filepath):
                     out_file.write(chunk)
 
         info_msg(f'成功转换文件: "{output_path}"')
+        
+        # 转换成功后删除源文件
+        if delete_original:
+            delete_source_file(filepath, output_path)
+        
         return output_path
 
     except KeyboardInterrupt:
@@ -138,17 +176,24 @@ def list_filepaths(path):
         error_msg(f'无法识别的路径: {path}')
         return []
 
-def dump(*paths, n_workers=None):
-    """主转换函数"""
+def dump(*paths, n_workers=None, delete_original=True):
+    """主转换函数
+    
+    Args:
+        paths: 文件或目录路径列表
+        n_workers: 并行工作进程数
+        delete_original: 是否在转换成功后删除源文件
+    """
     if n_workers is None:
         n_workers = 1
         
     # 显示简洁的头部信息
-    # header = """
+    header = f"""
     # NCM文件转换工具
     # ==============
-    # """
-    # info_msg(header.strip())
+    ==== 删除源文件: {'是' if delete_original else '否'} ====
+    """
+    info_msg(header.strip())
 
     # 收集所有文件路径
     all_filepaths = []
@@ -164,19 +209,29 @@ def dump(*paths, n_workers=None):
     # 执行转换
     if n_workers > 1:
         info_msg(f"使用 {n_workers} 个进程并行转换")
+        # 为多进程创建参数列表
+        task_args = [(fp, delete_original) for fp in all_filepaths]
         with Pool(processes=n_workers) as p:
-            results = p.map(dump_single_file, all_filepaths)
+            results = p.starmap(dump_single_file, task_args)
             # 统计成功和失败的数量
             successful = [r for r in results if r is not None]
+            deleted_count = len([r for r in results if r is not None and delete_original])
             info_msg(f"转换完成: {len(successful)} 个成功, {len(all_filepaths) - len(successful)} 个失败")
+            if delete_original:
+                info_msg(f"已删除 {deleted_count} 个源文件")
     else:
         info_msg("使用单进程模式转换")
         successful = 0
+        deleted_count = 0
         for fp in tqdm(all_filepaths, leave=False, desc="转换进度"):
-            result = dump_single_file(fp)
+            result = dump_single_file(fp, delete_original)
             if result is not None:
                 successful += 1
+                if delete_original:
+                    deleted_count += 1
         info_msg(f"转换完成: {successful} 个成功, {len(all_filepaths) - successful} 个失败")
+        if delete_original:
+            info_msg(f"已删除 {deleted_count} 个源文件")
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
@@ -196,5 +251,11 @@ if __name__ == '__main__':
         help='并行转换进程数 (默认: 1)',
         default=1
     )
+    parser.add_argument(
+        '--keep-original',
+        action='store_true',
+        help='保留源文件（不自动删除）'
+    )
+    
     args = parser.parse_args()
-    dump(*args.paths, n_workers=args.workers)
+    dump(*args.paths, n_workers=args.workers, delete_original=not args.keep_original)
